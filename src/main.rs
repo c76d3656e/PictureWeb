@@ -72,10 +72,10 @@ async fn get_how_many_pictures_in_images()->i128{
 
 /// # Example
 /// ```
-///     let picture = get_random_picture_name();
+///     let picture = get_random_picture_id();
 ///     assest_eq!((picture),"1.png");
 /// ```
-async fn get_random_picture_name()->String{
+async fn get_random_picture_id()->String{
     let number =get_how_many_pictures_in_images().await;
     let mut random_num:i128 =-1;
     match number {
@@ -86,17 +86,16 @@ async fn get_random_picture_name()->String{
             random_num = rng.gen_range(1..=number);
         }
     }
-    let picture = random_num.to_string()+".png";
-    return picture;
+    let picture_id = random_num.to_string();
+    return picture_id;
 }
 
 
-async fn get_picture_base64()->String{
-    let picture = get_random_picture_name().await;
+async fn get_picture_base64(picture_id : &String)->String{
     // get the file path
     let mut image_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     image_path.push("images");
-    image_path.push(picture);
+    image_path.push(picture_id.to_owned()+".png");
     // turn PathBuf to str
     let image_path = image_path.to_str()
         .expect("image_path get error");
@@ -104,20 +103,47 @@ async fn get_picture_base64()->String{
     return base64;
 }
 
+#[get("/target/{pictureid}")]
+async fn target_img_html(picture_id : web::Path<i64>,html_base:Data<Arc<HashMap<String, Data<Arc<String>>>>>)-> HttpResponse{
+    let exist_picture_number = get_how_many_pictures_in_images().await;
+    let picture_id=picture_id
+        .to_string()
+        .trim()
+        .parse::<i128>().unwrap();
+
+    if (picture_id<=0)||(picture_id>exist_picture_number){
+        let sorry = exist_picture_number.to_string()+" is alive,this picture do not exist";
+        HttpResponse::Ok().body(sorry);
+    }
+    
+    let picture_id = picture_id.to_string();
+
+    let base64 = get_picture_base64(&picture_id).await;
+    let html_base = html_base.get("random").unwrap();
+    let html = html_replace(html_base, base64, picture_id).await;
+    HttpResponse::Ok().body(html)
+}
 
 #[get("/random/")]
 async fn random_img_base64_html(html_base:Data<Arc<HashMap<String, Data<Arc<String>>>>>) -> impl Responder{
-    let base64 = get_picture_base64().await;
+    let picture_id = get_random_picture_id().await;
+    let base64 = get_picture_base64(&picture_id).await;
     let html_base = html_base.get("random").unwrap();
-    let html = html_base.replace("imgdata", &base64);
+    let html = html_replace(html_base, base64, picture_id).await;
     HttpResponse::Ok().body(html)
+}
+
+async fn html_replace(html_base:&Data<Arc<String>>,base64:String,picture_id:String)->String{
+    let html_base = html_base.replace("imgname",&(picture_id+".png"));
+    let html = html_base.replace("imgdata", &base64);
+    return html;
 }
 
 /// 准备html文件
 async fn html_base_make()->HashMap<String, Data<Arc<String>>>{
     let mut html_base = HashMap::new();
-    let random_html_base = Data::new(Arc::new(fs::read_to_string("random.html").unwrap()));
-    let upload_html_base = Data::new(Arc::new(fs::read_to_string("upload.html").unwrap()));
+    let random_html_base = Data::new(Arc::new(fs::read_to_string("./html/random.html").unwrap()));
+    let upload_html_base = Data::new(Arc::new(fs::read_to_string("./html/upload.html").unwrap()));
     html_base.insert(String::from("random"), random_html_base);
     html_base.insert(String::from("upload"), upload_html_base);
     return html_base;
