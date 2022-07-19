@@ -1,4 +1,5 @@
 # PictureWeb
+[Sample](http://p.c76d.xyz/random/)  
 ## a website only show picture
 
  **only suppose `png`**
